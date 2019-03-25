@@ -5,7 +5,7 @@ CoordinatesDataset::CoordinatesDataset(size_t batch_size, size_t number_of_batch
 {
 	for (int i = 0; i < number_of_batches; i++) {
 		batches.push_back(Matrix(Shape(batch_size, 2)));
-		targets.push_back(Matrix(Shape(batch_size, 1)));
+		targets.push_back(Matrix(Shape(batch_size, 2)));
 
 		batches[i].allocateMemory();
 		targets[i].allocateMemory();
@@ -17,11 +17,11 @@ CoordinatesDataset::CoordinatesDataset(size_t batch_size, size_t number_of_batch
 			if ( (batches[i][k] > 0 && batches[i][batches[i].shape.x + k] > 0) ||
 				 ((batches[i][k] < 0 && batches[i][batches[i].shape.x + k] < 0)) ) {
 				targets[i][k] = 1;
-				//targets[i][k * 2 + 1] = 0;
+				targets[i][batches[i].shape.x + k] = 0;
 			}
 			else {
 				targets[i][k] = 0;
-				//targets[i][k * 2 + 1] = 1;
+				targets[i][batches[i].shape.x + k] = 1;
 			}
 		}
 

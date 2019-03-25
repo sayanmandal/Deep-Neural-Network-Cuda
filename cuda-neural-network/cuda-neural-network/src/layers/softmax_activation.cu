@@ -4,9 +4,9 @@
 
 
 void printmatrix1(Matrix& m){
-	for(int i = 0 ; i < m.shape.x ; i++){
+	for(int i = 0 ; i < 2; i++){
 		for(int j = 0 ; j < m.shape.y ; j++)
-			std::cout << m[i * m.shape.y + j] << " ";
+			std::cout << m[j * m.shape.x + i] << " ";
 		std::cout << std::endl;
 	}
 
@@ -21,25 +21,40 @@ softmaxActivation::~softmaxActivation()
 { }
 
 
+__global__ void softmax_trivial(float* softmaxP, float* b, int rows, int cols){
+	int tid = threadIdx.x;
+	int bid = blockIdx.x;
+
+	float _max = -100000000.0;
+	float sum = 0.0;
+
+	if(tid * cols + bid < rows * cols){
+		for(int i = 0 ; i < rows ; i++)	_max = max(_max, b[i * cols + bid]);
+		for(int i = 0 ; i < rows ; i++)	softmaxP[i * cols + bid] = __expf(b[i * cols + bid] - _max);
+		for(int i = 0 ; i < rows ; i++)	sum += softmaxP[i * cols + bid];
+		for(int i = 0 ; i < rows ; i++)	softmaxP[i * cols + bid] /= sum;
+	}
+}
+
   /*
   * blocks : cuSoftMaxP->rows
   * threads: cuSoftMaxP->cols
   * shared : sizeof(float) * cuSoftMaxP->cols * 2
   */
-__global__ void g_getSoftMaxP(float* softMaxP, float* b, int cols){
+__global__ void g_getSoftMaxP(float* softMaxP, float* b, int cols, int row){
   int bid = blockIdx.x;
 	extern __shared__ float _share[];
 	float * _max = _share;
 	float * _sum = _share + blockDim.x;
-	float* sp = softMaxP + bid * cols;
+	float* sp = softMaxP + bid;
 	_sum[threadIdx.x] = 0.0;
 	_max[threadIdx.x] = -100000000.0;
-	for(int tid = 0; tid < cols; tid += blockDim.x){
-		int id = tid + threadIdx.x;
-		if(id < cols){
-			sp[id] += b[id];
-			_max[threadIdx.x] = max(_max[threadIdx.x], sp[id]);
-		}
+	for(int tid = threadIdx.x * cols + blockIdx.x; tid < row * cols; tid += cols){
+		//int id = tid + threadIdx.x;
+		//if(id < cols){
+			sp[tid] += b[tid];
+			_max[threadIdx.x] = max(_max[threadIdx.x], sp[tid]);
+		//}
 	}
 	__syncthreads();
 	int len = blockDim.x;
@@ -57,13 +72,13 @@ __global__ void g_getSoftMaxP(float* softMaxP, float* b, int cols){
 		len = (len + 1) >> 1;
 	}
 	__syncthreads();
-	for(int tid = 0; tid < cols; tid += blockDim.x){
-		int id = tid + threadIdx.x;
-		if(id < cols){
-			sp[id] -= _max[0];
-			sp[id] = exp(sp[id]);
-			_sum[threadIdx.x] += sp[id];
-		}
+	for(int tid = threadIdx.x * cols + blockIdx.x; tid < row * cols; tid += cols){
+	//	int id = tid + threadIdx.x;
+		//if(id < cols){
+			sp[tid] -= _max[0];
+			sp[tid] = __expf(sp[tid]);
+			_sum[threadIdx.x] += sp[tid];
+		//}
 	}
 	__syncthreads();
 	len = blockDim.x;
@@ -78,11 +93,11 @@ __global__ void g_getSoftMaxP(float* softMaxP, float* b, int cols){
 		len = (len + 1) >> 1;
 	}
 	__syncthreads();
-	for(int tid = 0; tid < cols; tid += blockDim.x){
-		int id = tid + threadIdx.x;
-		if(id < cols){
-			sp[id] /= _sum[0];
-		}
+	for(int tid = threadIdx.x * cols + blockIdx.x; tid < row * cols; tid += cols){
+		//int id = tid + threadIdx.x;
+		//if(id < cols){
+			sp[tid] /= _sum[0];
+		//}
 	}
 }
 
@@ -92,7 +107,8 @@ Matrix& softmaxActivation::forward(Matrix& Z) {
 	this->Z = Z;
 	A.allocateMemoryIfNotAllocated(Z.shape);
   //int szy = Z.shape.y;
-  dim3 block  = Z.shape.x;
+	/*
+  dim3 block  = A.shape.x;
   //dim3 thread = std::min(512, szy);
   //convert
   //Z.copyDeviceToHost();
@@ -103,7 +119,14 @@ Matrix& softmaxActivation::forward(Matrix& Z) {
   g_getSoftMaxP<<<block, threads, sizeof(float) * threads * 2>>>(
   A.data_device.get(),
   Z.data_device.get(),
-  A.shape.y);
+  A.shape.x, A.shape.y);
+	*/
+
+	dim3 block = A.shape.x;
+	dim3 threads = 1;
+	softmax_trivial<<<block, threads>>>(A.data_device.get(), Z.data_device.get(), A.shape.y, A.shape.x);
+
+
   cudaStreamSynchronize(0);
   //A.copyDeviceToHost();
   //printmatrix1(A);

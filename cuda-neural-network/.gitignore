@@ -2,3 +2,5 @@ Debug
 Release
 .metadata
 RemoteSystemsTempFiles
+data/
+!.keep
