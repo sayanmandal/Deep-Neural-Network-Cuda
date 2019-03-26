@@ -6,6 +6,35 @@
 #include "linear_layer.hh"
 #include "../nn_utils/nn_exception.hh"
 
+
+
+
+/*
+__global__ void initializeWeightsKernel(float* W, int size){
+
+	__device__ std::default_random_engine generator;
+	__device__ std::normal_distribution<float> normal_distribution(0.0, 1.0);
+	float weights_init_threshold = 0.01;
+
+	int index = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if(index < size){
+		W[index] = normal_distribution(generator) * weights_init_threshold;
+	}
+}
+*/
+
+
+__global__ void initializeBiasKernel(float* b, int size){
+
+	int index = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if(index < size){
+		b[index] = 0.0;
+	}
+}
+
+
 __global__ void linearLayerForward( float* W, float* A, float* Z, float* b,
 									int W_x_dim, int W_y_dim,
 									int A_x_dim, int A_y_dim) {
@@ -96,8 +125,10 @@ LinearLayer::~LinearLayer()
 { }
 
 void LinearLayer::initializeWeightsRandomly() {
+
 	std::default_random_engine generator;
 	std::normal_distribution<float> normal_distribution(0.0, 1.0);
+	float weights_init_threshold = 0.01;
 
 	for (int x = 0; x < W.shape.x; x++) {
 		for (int y = 0; y < W.shape.y; y++) {
@@ -106,14 +137,30 @@ void LinearLayer::initializeWeightsRandomly() {
 	}
 
 	W.copyHostToDevice();
+
+	/*
+
+	dim3 blockDim(256);
+	dim3 gridDim((W.shape.x * W.shape.y + blockDim.x - 1)/blockDim.x);
+
+	initializeWeightsKernel<<<gridDim, blockDim>>>(W.data_device.get(), W.shape.x * W.shape.y);
+	*/
 }
 
 void LinearLayer::initializeBiasWithZeros() {
+
+	/*
 	for (int x = 0; x < b.shape.x; x++) {
 		b[x] = 0;
 	}
 
 	b.copyHostToDevice();
+	*/
+
+	dim3 blockDim(256);
+	dim3 gridDim((b.shape.x * b.shape.y + blockDim.x - 1)/blockDim.x);
+
+	initializeBiasKernel<<<gridDim, blockDim>>>(b.data_device.get(), b.shape.x * b.shape.y);
 }
 
 Matrix& LinearLayer::forward(Matrix& A) {

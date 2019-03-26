@@ -33,7 +33,7 @@ void printmatrix1(const Matrix& m){
 
 
 float computeAccuracy_mnist(const Matrix& predictions, const Matrix& targets);
-float computeAccuracyClasses_mnist(const Matrix& predictions, const Matrix& targets, int k);
+int computeAccuracyClasses_mnist(const Matrix& predictions, const Matrix& targets, int k);
 int main() {
 
 	srand( time(NULL) );
@@ -67,6 +67,22 @@ int main() {
   }
 
 
+	std::cout << "Testing..." << std::endl;
+
+	int correct_predictions = 0;
+
+	MNISTDataset mnist_test(num_batches_test, batch_size, classes, TEST);
+
+	for(int batch = 0 ; batch < num_batches_test;  batch++){
+		Y = nn.forward(mnist_test.getBatches().at(batch));
+		Y.copyDeviceToHost();
+		correct_predictions += computeAccuracyClasses_mnist(Y, mnist_test.getTargets().at(batch), classes);
+	}
+
+	float accuracy = (float)correct_predictions / (num_batches_test * batch_size);
+	std::cout << "Accuracy: " << accuracy << std::endl;
+
+
 
 
 	return 0;
@@ -88,7 +104,7 @@ float computeAccuracy_mnist(const Matrix& predictions, const Matrix& targets) {
 }
 
 
-float computeAccuracyClasses_mnist(const Matrix& predictions, const Matrix& targets, int k) {
+int computeAccuracyClasses_mnist(const Matrix& predictions, const Matrix& targets, int k) {
 	int m = predictions.shape.x;
 	int correct_predictions = 0;
 	//printmatrix(predictions);
@@ -110,6 +126,6 @@ float computeAccuracyClasses_mnist(const Matrix& predictions, const Matrix& targ
 		}
 		if(label == labely)	correct_predictions++;
 	}
-
-	return static_cast<float>(correct_predictions) / m;
+	return correct_predictions;
+	//return static_cast<float>(correct_predictions) / m;
 }
