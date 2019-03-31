@@ -21,6 +21,9 @@ private:
 	Matrix A;
 	Matrix dA;
 
+	Matrix AT;
+	Matrix WT;
+
 	void initializeBiasWithZeros();
 	void initializeWeightsRandomly();
 
