@@ -235,6 +235,38 @@ __global__ void linearLayerUpdateBias(float* dZ, float* b,
 	}
 }
 
+
+__global__ void updateBiasKernel(float* dZ, float* b, int cols, int row, float learning_rate){
+	int bid = blockIdx.x;
+	extern __shared__ float _share[];
+	//float * _max = _share;
+	float * _sum = _share;
+	float* sp = dZ + cols * bid;
+	_sum[threadIdx.x] = 0.0;
+
+	for(int id = threadIdx.x ; id < cols; id += blockDim.x){
+	//	int id = tid + threadIdx.x;
+		//if(id < cols){
+			_sum[threadIdx.x] += sp[id];
+		//}
+	}
+	__syncthreads();
+	int len = blockDim.x;
+	while(len != 1)
+	{
+		__syncthreads();
+		int skip = (len + 1) >> 1;
+		if(threadIdx.x < (len >> 1))
+		{
+			_sum[threadIdx.x] += _sum[threadIdx.x + skip];
+		}
+		len = (len + 1) >> 1;
+	}
+	__syncthreads();
+	b[bid] -= learning_rate * (_sum[0]/cols);
+}
+
+
 LinearLayer::LinearLayer(std::string name, Shape W_shape) :
 	W(W_shape), b(W_shape.y, 1)
 {
@@ -314,12 +346,16 @@ void LinearLayer::computeAndStoreLayerOutput(Matrix& A) {
 													   A.shape.x, A.shape.y);
 	*/
 
+
 	matrixMultiply<<<num_of_blocks, block_size>>>(W.data_device.get(),
 														A.data_device.get(),
 														Z.data_device.get(),
 														W.shape.y, W.shape.x,
 														A.shape.y, A.shape.x,
 														Z.shape.y, Z.shape.x);
+
+
+	//matrixMultiply<<<num_of_blocks, block_size>>>(A.shape.x, W.shape.y, A.shape.y, A.data_device.get(), W.data_device.get(), Z.data_device.get());
 
 	addBias<<<num_of_blocks, block_size>>>(Z.data_device.get(),
 													b.data_device.get(),
@@ -408,12 +444,19 @@ void LinearLayer::updateWeights(Matrix& dZ, float learning_rate) {
 }
 
 void LinearLayer::updateBias(Matrix& dZ, float learning_rate) {
+	/*
 	dim3 block_size(256);
 	dim3 num_of_blocks( (dZ.shape.y * dZ.shape.x + block_size.x - 1) / block_size.x);
 	linearLayerUpdateBias<<<num_of_blocks, block_size>>>(dZ.data_device.get(),
 														 b.data_device.get(),
 														 dZ.shape.x, dZ.shape.y,
 														 b.shape.x, learning_rate);
+		*/
+
+	dim3 block_size(std::min(256, int(dZ.shape.x)));
+	dim3 num_of_blocks(dZ.shape.y);
+	updateBiasKernel<<<num_of_blocks, block_size, sizeof(float) * block_size.x>>>(dZ.data_device.get(), b.data_device.get(), dZ.shape.x, dZ.shape.y, learning_rate);
+
 }
 
 int LinearLayer::getXDim() const {
