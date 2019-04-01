@@ -16,12 +16,54 @@ __global__ void sigmoidActivationForward(float* Z, float* A,
 	}
 }
 
+__global__ void multiplyKernel(float* Z, float* A, float* B, int size){
+	int id = blockDim.x * blockIdx.x + threadIdx.x;
+
+	if(id < size){
+		Z[id] = A[id] * B[id];
+	}
+}
+
+
+__global__ void expKernel(float* Z, float* A, int size){
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if(id < size){
+		A[id] = __expf(-Z[id]);
+	}
+}
+
+__global__ void addKernel(float* A, int size){
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if(id < size){
+		A[id] = 1 + A[id];
+	}
+}
+
+
+__global__ void divideKernel(float* A, int size){
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if(id < size){
+		A[id] = 1.0f / A[id];
+	}
+}
+
+__global__ void minusKernel(float* A, int size){
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if(id < size){
+		A[id] = 1 - A[id];
+	}
+}
+
 __global__ void sigmoidActivationBackprop(float* Z, float* dA, float* dZ,
 										  int Z_x_dim, int Z_y_dim) {
 
 	int index = blockIdx.x * blockDim.x + threadIdx.x;
 
-	if (index < Z_x_dim * Z_y_dim) {
+	if (index < Z_x_dim * Z_y_dim){
 		dZ[index] = dA[index] * sigmoid(Z[index]) * (1 - sigmoid(Z[index]));
 	}
 }
@@ -40,8 +82,17 @@ Matrix& SigmoidActivation::forward(Matrix& Z) {
 	dim3 block_size(256);
 	dim3 num_of_blocks((Z.shape.y * Z.shape.x + block_size.x - 1) / block_size.x);
 
+/*
 	sigmoidActivationForward<<<num_of_blocks, block_size>>>(Z.data_device.get(), A.data_device.get(),
 														   	Z.shape.x, Z.shape.y);
+																*/
+	expKernel<<<num_of_blocks, block_size>>>(Z.data_device.get(), A.data_device.get(), A.shape.x * A.shape.y);
+	addKernel<<<num_of_blocks, block_size>>>(Z.data_device.get(), Z.shape.x * Z.shape.y);
+	divideKernel<<<num_of_blocks, block_size>>>(Z.data_device.get(), Z.shape.x * Z.shape.y);
+
+
+
+
 	NNException::throwIfDeviceErrorsOccurred("Cannot perform sigmoid forward propagation.");
 
 	return A;
@@ -49,12 +100,32 @@ Matrix& SigmoidActivation::forward(Matrix& Z) {
 
 Matrix& SigmoidActivation::backprop(Matrix& dA, float learning_rate) {
 	dZ.allocateMemoryIfNotAllocated(Z.shape);
+	T.allocateMemoryIfNotAllocated(Z.shape);
 
 	dim3 block_size(256);
 	dim3 num_of_blocks((Z.shape.y * Z.shape.x + block_size.x - 1) / block_size.x);
+
+	/*
 	sigmoidActivationBackprop<<<num_of_blocks, block_size>>>(Z.data_device.get(), dA.data_device.get(),
 															 dZ.data_device.get(),
 															 Z.shape.x, Z.shape.y);
+		*/
+	expKernel<<<num_of_blocks, block_size>>>(T.data_device.get(), Z.data_device.get(), Z.shape.x * Z.shape.y);
+	addKernel<<<num_of_blocks, block_size>>>(T.data_device.get(), Z.shape.x * Z.shape.y);
+	divideKernel<<<num_of_blocks, block_size>>>(T.data_device.get(), Z.shape.x * Z.shape.y);
+
+	multiplyKernel<<<num_of_blocks, block_size>>>(dZ.data_device.get(), dA.data_device.get(), T.data_device.get(), T.shape.x * T.shape.y);
+
+	expKernel<<<num_of_blocks, block_size>>>(T.data_device.get(), Z.data_device.get(), Z.shape.x * Z.shape.y);
+	addKernel<<<num_of_blocks, block_size>>>(T.data_device.get(), Z.shape.x * Z.shape.y);
+	divideKernel<<<num_of_blocks, block_size>>>(T.data_device.get(), Z.shape.x * Z.shape.y);
+
+	minusKernel<<<num_of_blocks, block_size>>>(T.data_device.get(), T.shape.x * T.shape.y);
+
+	multiplyKernel<<<num_of_blocks, block_size>>>(dZ.data_device.get(), dZ.data_device.get(), T.data_device.get(), T.shape.x * T.shape.y);
+
+
+
 	NNException::throwIfDeviceErrorsOccurred("Cannot perform sigmoid back propagation");
 
 	return dZ;

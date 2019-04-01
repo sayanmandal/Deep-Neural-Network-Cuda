@@ -5,6 +5,15 @@
 #include <iostream>
 #include <assert.h>
 
+void printmatrix2(Matrix& m){
+	for(int i = 0 ; i < m.shape.x; i++){
+		for(int j = 0 ; j < m.shape.y ; j++)
+			std::cout << m[j * m.shape.x + i] << " ";
+		std::cout << std::endl;
+	}
+
+}
+
 
 __global__
 void dCategoricalCrossEntropyCost(float* predictions, float* target, float* dY,
@@ -47,7 +56,8 @@ float CCECost::cost(Matrix predictions, Matrix target) {
 		std::cout << std::endl;
 	}
 	*/
-
+	//predictions.copyDeviceToHost();
+	//printmatrix2(predictions);
 
 
 	dim3 block_size(256);

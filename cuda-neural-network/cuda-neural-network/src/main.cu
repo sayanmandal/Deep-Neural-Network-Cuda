@@ -3,6 +3,7 @@
 
 #include "neural_network.hh"
 #include "layers/linear_layer.hh"
+#include "layers/linear_relu.hh"
 #include "layers/relu_activation.hh"
 #include "layers/sigmoid_activation.hh"
 #include "nn_utils/nn_exception.hh"
@@ -44,13 +45,32 @@ int main() {
   NeuralNetwork nn;
   nn.addLayer(new LinearLayer("linear_1", Shape(28 * 28, 256)));
   nn.addLayer(new ReLUActivation("relu_1"));
-  nn.addLayer(new LinearLayer("linear_2", Shape(256, 10)));
+	//nn.addLayer(new LinearReluLayer("linear_relu", Shape(256, 128)));
+	/*
+  nn.addLayer(new LinearLayer("linear_2", Shape(512, 512)));
+	nn.addLayer(new SigmoidActivation("relu_2"));
+	*/
+	/*
+
+  nn.addLayer(new LinearLayer("linear_3", Shape(512, 512)));
+	nn.addLayer(new SigmoidActivation("relu_3"));
+	nn.addLayer(new LinearLayer("linear_4", Shape(512, 512)));
+	nn.addLayer(new SigmoidActivation("relu_4"));
+	nn.addLayer(new LinearLayer("linear_5", Shape(512, 256)));
+	nn.addLayer(new SigmoidActivation("relu_5"));
+	nn.addLayer(new LinearLayer("linear_6", Shape(256, 256)));
+	nn.addLayer(new ReLUActivation("relu_6"));
+	nn.addLayer(new LinearLayer("linear_7", Shape(256, 128)));
+	nn.addLayer(new ReLUActivation("relu_7"));
+
+*/
+	nn.addLayer(new LinearLayer("linear_8", Shape(256, 10)));
   nn.addLayer(new softmaxActivation("softmax_output"));
 
   MNISTDataset mnist(num_batches_train, batch_size, classes);
   //float cost = 0.0;
 
-  for (int epoch = 0; epoch < 1001; epoch++) {
+  for (int epoch = 0; epoch < 601; epoch++) {
 		float cost = 0.0;
     for(int batch = 0 ; batch < num_batches_train ; batch++){
        //Y = mnist.getBatches().at(batch);

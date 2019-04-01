@@ -9,6 +9,8 @@ private:
 	Matrix Z;
 	Matrix dZ;
 
+	Matrix T;
+
 public:
 	SigmoidActivation(std::string name);
 	~SigmoidActivation();
