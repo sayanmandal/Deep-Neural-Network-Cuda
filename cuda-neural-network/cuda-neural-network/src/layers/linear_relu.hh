@@ -6,6 +6,7 @@ private:
 
 	Matrix W;
 	Matrix b;
+	Matrix T;
 
 	Matrix Z;
 	Matrix A;

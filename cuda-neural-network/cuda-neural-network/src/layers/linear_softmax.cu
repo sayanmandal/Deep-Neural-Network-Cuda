@@ -6,7 +6,7 @@
 
 #include "../nn_utils/nn_exception.hh"
 #include "../nn_utils/shape.hh"
-#include "linear_relu.hh"
+#include "linear_softmax.hh"
 
 
 
@@ -17,7 +17,7 @@
 // than the naive kernel below.  Note that the shared memory array is sized to
 // (BLOCK_DIM+1)*BLOCK_DIM.  This pads each row of the 2D block in shared memory
 // so that bank conflicts do not occur when threads address the array column-wise.
-__global__ void transpose_relu(float *odata, float *idata, int width, int height)
+__global__ void transpose_softmax(float *odata, float *idata, int width, int height)
 {
 	__shared__ float block[BLOCK_DIM][BLOCK_DIM+1];
 
@@ -47,11 +47,10 @@ __global__ void transpose_relu(float *odata, float *idata, int width, int height
 
 
 
-
 #define TILE_WIDTH 16
 
 // Compute C = A * B
-__global__ void matrixMultiplyAndRelu(float * A, float * B, float * C, float* b, float* T,
+__global__ void matrixMultiplyAndSoftmax(float * A, float * B, float * C, float* b,
   		       int numARows, int numAColumns,
 			       int numBRows, int numBColumns,
 			       int numCRows, int numCColumns) {
@@ -80,16 +79,14 @@ __global__ void matrixMultiplyAndRelu(float * A, float * B, float * C, float* b,
        __syncthreads();
     }
 
-    if (Row < numCRows && Col < numCColumns){
-			 float num = (Pvalue + b[Row]);
-				T[Row*numCColumns+Col] = num;
-       C[Row*numCColumns+Col] = fmaxf(num , 0);
-		 }
+    if (Row < numCRows && Col < numCColumns)
+       C[Row*numCColumns+Col] = (Pvalue + b[Row]);
 }
 
 
 
-__global__ void matrixMultiplyBackPropRelu(float * A, float * B, float * C,
+
+__global__ void matrixMultiplyBackPropSoftmax(float * A, float * B, float * C,
   		       int numARows, int numAColumns,
 			       int numBRows, int numBColumns,
 			       int numCRows, int numCColumns) {
@@ -125,7 +122,7 @@ __global__ void matrixMultiplyBackPropRelu(float * A, float * B, float * C,
 
 
 // Compute C = A * B
-__global__ void matrixMultiplyUpdateWeights_relu(float * A, float * B, float * C,
+__global__ void matrixMultiplyUpdateWeights_softmax(float * A, float * B, float * C,
   		       int numARows, int numAColumns,
 			       int numBRows, int numBColumns,
 			       int numCRows, int numCColumns,
@@ -163,7 +160,7 @@ __global__ void matrixMultiplyUpdateWeights_relu(float * A, float * B, float * C
 
 
 
-__global__ void initializeBiasKernel_relu(float* b, int size){
+__global__ void initializeBiasKernel_softmax(float* b, int size){
 
 	int index = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -174,7 +171,7 @@ __global__ void initializeBiasKernel_relu(float* b, int size){
 
 
 
-__global__ void updateBiasKernel_relu(float* dZ, float* b, int cols, int row, float learning_rate){
+__global__ void updateBiasKernel_softmax(float* dZ, float* b, int cols, int row, float learning_rate){
 	int bid = blockIdx.x;
 	extern __shared__ float _share[];
 	//float * _max = _share;
@@ -205,20 +202,20 @@ __global__ void updateBiasKernel_relu(float* dZ, float* b, int cols, int row, fl
 }
 
 
-LinearReluLayer::LinearReluLayer(std::string name, Shape W_shape) :
+LinearSoftmaxLayer::LinearSoftmaxLayer(std::string name, Shape W_shape) :
 	W(W_shape), b(W_shape.y, 1)
 {
 	this->name = name;
 	b.allocateMemory();
 	W.allocateMemory();
-	initializeBiasWithZeros_Relu();
-	initializeWeightsRandomly_Relu();
+	initializeBiasWithZeros_softmax();
+	initializeWeightsRandomly_softmax();
 }
 
-LinearReluLayer::~LinearReluLayer()
+LinearSoftmaxLayer::~LinearSoftmaxLayer()
 { }
 
-void LinearReluLayer::initializeWeightsRandomly_Relu() {
+void LinearSoftmaxLayer::initializeWeightsRandomly_softmax() {
 
 	std::default_random_engine generator;
 	std::normal_distribution<float> normal_distribution(0.0, 1.0);
@@ -241,7 +238,7 @@ void LinearReluLayer::initializeWeightsRandomly_Relu() {
 	*/
 }
 
-void LinearReluLayer::initializeBiasWithZeros_Relu() {
+void LinearSoftmaxLayer::initializeBiasWithZeros_softmax() {
 
 	/*
 	for (int x = 0; x < b.shape.x; x++) {
@@ -254,25 +251,45 @@ void LinearReluLayer::initializeBiasWithZeros_Relu() {
 	dim3 blockDim(256);
 	dim3 gridDim((b.shape.x * b.shape.y + blockDim.x - 1)/blockDim.x);
 
-	initializeBiasKernel_relu<<<gridDim, blockDim>>>(b.data_device.get(), b.shape.x * b.shape.y);
+	initializeBiasKernel_softmax<<<gridDim, blockDim>>>(b.data_device.get(), b.shape.x * b.shape.y);
 }
 
-Matrix& LinearReluLayer::forward(Matrix& A) {
+Matrix& LinearSoftmaxLayer::forward(Matrix& A) {
 	assert(W.shape.x == A.shape.y);
 
 	this->A = A;
 	Shape Z_shape(A.shape.x, W.shape.y);
 	Z.allocateMemoryIfNotAllocated(Z_shape);
-
 	T.allocateMemoryIfNotAllocated(Z_shape);
 
-	computeAndStoreLayerOutput_Relu(A);
+	computeAndStoreLayerOutput_softmax(A);
 	NNException::throwIfDeviceErrorsOccurred("Cannot perform linear layer forward propagation.");
 
 	return Z;
 }
 
-void LinearReluLayer::computeAndStoreLayerOutput_Relu(Matrix& A) {
+
+
+__global__ void softmax_linear(float* softmaxP, float* b, int rows, int cols){
+	int tid = threadIdx.x;
+	int bid = blockIdx.x;
+
+	float _max = -100000000.0;
+	float sum = 0.0;
+
+  extern __shared__ float _share[];
+
+	if(tid * cols + bid < rows * cols){
+    for(int i = 0 ; i < rows ; i++) _share[i] = b[i * cols + bid];
+		for(int i = 0 ; i < rows ; i++)	_max = max(_max, _share[i]);
+		for(int i = 0 ; i < rows ; i++)	_share[i] = __expf(_share[i]-_max);
+		for(int i = 0 ; i < rows ; i++)	sum += _share[i];
+		for(int i = 0 ; i < rows ; i++)	softmaxP[i * cols + bid] = _share[i]/sum;
+	}
+}
+
+
+void LinearSoftmaxLayer::computeAndStoreLayerOutput_softmax(Matrix& A) {
 	dim3 block_size(TILE_WIDTH, TILE_WIDTH);
 	dim3 num_of_blocks(	(Z.shape.x + block_size.x - 1) / block_size.x,
 						(Z.shape.y + block_size.y - 1) / block_size.y);
@@ -287,56 +304,48 @@ void LinearReluLayer::computeAndStoreLayerOutput_Relu(Matrix& A) {
 
 														 */
 
-	matrixMultiplyAndRelu<<<num_of_blocks, block_size>>>(W.data_device.get(),
+	matrixMultiplyAndSoftmax<<<num_of_blocks, block_size>>>(W.data_device.get(),
 														A.data_device.get(),
-														Z.data_device.get(),
-                            b.data_device.get(),
 														T.data_device.get(),
+                            b.data_device.get(),
 														W.shape.y, W.shape.x,
 														A.shape.y, A.shape.x,
-														Z.shape.y, Z.shape.x);
+														T.shape.y, T.shape.x);
 
+
+	dim3 block = T.shape.x;
+	dim3 threads = 1;
+	softmax_linear<<<block, threads, Z.shape.y * sizeof(float)>>>(Z.data_device.get(), T.data_device.get(), Z.shape.y, Z.shape.x);
 
 
 }
 
-__global__ void ReluBackKernel(float* Z, float* dZ, int size){
-  int id = blockIdx.x * blockDim.x + threadIdx.x;
-  if(id < size){
-    if(Z[id] == 0) dZ[id] = 0;
-  }
-}
 
-Matrix& LinearReluLayer::backprop(Matrix& dZ, float learning_rate) {
+
+Matrix& LinearSoftmaxLayer::backprop(Matrix& dZ, float learning_rate) {
 	dA.allocateMemoryIfNotAllocated(A.shape);
 	WT.allocateMemoryIfNotAllocated(Shape(W.shape.y, W.shape.x));
 	AT.allocateMemoryIfNotAllocated(Shape(A.shape.y, A.shape.x));
 
 	//std::cout << "Here" << std::endl;
 
-  ReluBackProp(dZ);
-  NNException::throwIfDeviceErrorsOccurred("Cannot perform back propagation Relu Fusion.");
 
-	computeAndStoreBackpropError_Relu(dZ);
+
+	computeAndStoreBackpropError_softmax(dZ);
 	NNException::throwIfDeviceErrorsOccurred("Cannot perform back propagation.");
 
-	updateBias_Relu(dZ, learning_rate);
+	updateBias_softmax(dZ, learning_rate);
 	NNException::throwIfDeviceErrorsOccurred("Cannot perform bias update.");
 
-	updateWeights_Relu(dZ, learning_rate);
+	updateWeights_softmax(dZ, learning_rate);
 	NNException::throwIfDeviceErrorsOccurred("Cannot perform weights update.");
 
 	return dA;
 }
 
-void LinearReluLayer::ReluBackProp(Matrix& dZ){
-  dim3 block_size(256);
-  dim3 num_of_block((Z.shape.x * Z.shape.y + block_size.x - 1)/block_size.x);
-  ReluBackKernel<<<num_of_block, block_size>>>(Z.data_device.get(), dZ.data_device.get(), dZ.shape.x * dZ.shape.y);
-}
 
 
-void LinearReluLayer::computeAndStoreBackpropError_Relu(Matrix& dZ) {
+void LinearSoftmaxLayer::computeAndStoreBackpropError_softmax(Matrix& dZ) {
 	dim3 block_size(TILE_WIDTH, TILE_WIDTH);
 	dim3 num_of_blocks(	(A.shape.x + block_size.x - 1) / block_size.x,
 						(A.shape.y + block_size.y - 1) / block_size.y);
@@ -353,11 +362,11 @@ void LinearReluLayer::computeAndStoreBackpropError_Relu(Matrix& dZ) {
 	dim3 transpose_relu_block(BLOCK_DIM, BLOCK_DIM);
 	dim3 num_t_blocks((W.shape.x + transpose_relu_block.x - 1) / transpose_relu_block.x,
 						(W.shape.y + transpose_relu_block.y - 1) / transpose_relu_block.y);
-	transpose_relu<<<num_t_blocks, transpose_relu_block>>>(WT.data_device.get(), W.data_device.get(), W.shape.x, W.shape.y);
+	transpose_softmax<<<num_t_blocks, transpose_relu_block>>>(WT.data_device.get(), W.data_device.get(), W.shape.x, W.shape.y);
 
 
 
-	matrixMultiplyBackPropRelu<<<num_of_blocks, block_size>>>(WT.data_device.get(),
+	matrixMultiplyBackPropSoftmax<<<num_of_blocks, block_size>>>(WT.data_device.get(),
 															dZ.data_device.get(),
 															dA.data_device.get(),
 															WT.shape.y, WT.shape.x,
@@ -366,7 +375,7 @@ void LinearReluLayer::computeAndStoreBackpropError_Relu(Matrix& dZ) {
 
 }
 
-void LinearReluLayer::updateWeights_Relu(Matrix& dZ, float learning_rate) {
+void LinearSoftmaxLayer::updateWeights_softmax(Matrix& dZ, float learning_rate) {
 	dim3 block_size(TILE_WIDTH, TILE_WIDTH);
 	dim3 num_of_blocks(	(W.shape.x + block_size.x - 1) / block_size.x,
 						(W.shape.y + block_size.y - 1) / block_size.y);
@@ -383,10 +392,10 @@ void LinearReluLayer::updateWeights_Relu(Matrix& dZ, float learning_rate) {
 	dim3 transpose_relu_block(BLOCK_DIM, BLOCK_DIM);
 	dim3 num_t_blocks((A.shape.x + transpose_relu_block.x - 1) / transpose_relu_block.x,
 						(A.shape.y + transpose_relu_block.y - 1) / transpose_relu_block.y);
-	transpose_relu<<<num_t_blocks, transpose_relu_block>>>(AT.data_device.get(), A.data_device.get(), A.shape.x, A.shape.y);
+	transpose_softmax<<<num_t_blocks, transpose_relu_block>>>(AT.data_device.get(), A.data_device.get(), A.shape.x, A.shape.y);
 
 
-	matrixMultiplyUpdateWeights_relu<<<num_of_blocks, block_size>>>(dZ.data_device.get(),
+	matrixMultiplyUpdateWeights_softmax<<<num_of_blocks, block_size>>>(dZ.data_device.get(),
 																AT.data_device.get(),
 																W.data_device.get(),
 																dZ.shape.y, dZ.shape.x,
@@ -396,7 +405,7 @@ void LinearReluLayer::updateWeights_Relu(Matrix& dZ, float learning_rate) {
 
 }
 
-void LinearReluLayer::updateBias_Relu(Matrix& dZ, float learning_rate) {
+void LinearSoftmaxLayer::updateBias_softmax(Matrix& dZ, float learning_rate) {
 /*
 	dim3 block_size(256);
 	dim3 num_of_blocks( (dZ.shape.y * dZ.shape.x + block_size.x - 1) / block_size.x);
@@ -408,22 +417,22 @@ void LinearReluLayer::updateBias_Relu(Matrix& dZ, float learning_rate) {
 											*/
 	dim3 block_size(std::min(256, int(dZ.shape.x)));
 	dim3 num_of_blocks(dZ.shape.y);
-	updateBiasKernel_relu<<<num_of_blocks, block_size, sizeof(float) * block_size.x>>>(dZ.data_device.get(), b.data_device.get(), dZ.shape.x, dZ.shape.y, learning_rate);
+	updateBiasKernel_softmax<<<num_of_blocks, block_size, sizeof(float) * block_size.x>>>(dZ.data_device.get(), b.data_device.get(), dZ.shape.x, dZ.shape.y, learning_rate);
 
 }
 
-int LinearReluLayer::getXDim() const {
+int LinearSoftmaxLayer::getXDim() const {
 	return W.shape.x;
 }
 
-int LinearReluLayer::getYDim() const {
+int LinearSoftmaxLayer::getYDim() const {
 	return W.shape.y;
 }
 
-Matrix LinearReluLayer::getWeightsMatrix() const {
+Matrix LinearSoftmaxLayer::getWeightsMatrix() const {
 	return W;
 }
 
-Matrix LinearReluLayer::getBiasVector() const {
+Matrix LinearSoftmaxLayer::getBiasVector() const {
 	return b;
 }

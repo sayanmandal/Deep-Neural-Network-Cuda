@@ -300,15 +300,17 @@ void LinearSigmoidLayer::computeAndStoreLayerOutput_sigmoid(Matrix& A) {
 __global__ void SigmoidBackKernel(float* Z, float* dZ, int size){
   int id = blockIdx.x * blockDim.x + threadIdx.x;
   if(id < size){
-    float t = sigmoid_linear(Z[id]);
+    float t = Z[id];
     dZ[id] = dZ[id] * t * (1-t) ;
   }
 }
 
 Matrix& LinearSigmoidLayer::backprop(Matrix& dZ, float learning_rate) {
+	//std::cout << dB.shape.x << " " << dB.shape.y << std::endl;
 	dA.allocateMemoryIfNotAllocated(A.shape);
 	WT.allocateMemoryIfNotAllocated(Shape(W.shape.y, W.shape.x));
 	AT.allocateMemoryIfNotAllocated(Shape(A.shape.y, A.shape.x));
+	//dZeta.allocateMemoryIfNotAllocated(dB.shape);
 
 	//std::cout << "Here" << std::endl;
 
@@ -328,9 +330,9 @@ Matrix& LinearSigmoidLayer::backprop(Matrix& dZ, float learning_rate) {
 }
 
 void LinearSigmoidLayer::SigmoidBackProp(Matrix& dZ){
-  dim3 block_size(8, 8);
-  dim3 num_of_block((dZ.shape.x + block_size.x - 1)/ block_size.x, (dZ.shape.y + block_size.y - 1)/ block_size.y);
-  SigmoidBackKernel<<<block_size, num_of_block>>>(Z.data_device.get(), dZ.data_device.get(), Z.shape.x * Z.shape.y);
+  dim3 block_size(256);
+  dim3 num_of_block((Z.shape.x * Z.shape.y + block_size.x - 1)/block_size.x);
+  SigmoidBackKernel<<<num_of_block, block_size>>>(Z.data_device.get(), dZ.data_device.get(), Z.shape.x * Z.shape.y);
 }
 
 

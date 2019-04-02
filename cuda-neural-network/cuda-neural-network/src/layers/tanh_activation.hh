@@ -9,6 +9,13 @@ private:
 	Matrix Z;
 	Matrix dZ;
 
+	Matrix E;
+	Matrix B;
+	Matrix C;
+	Matrix D;
+	Matrix dE;
+	Matrix dF;
+
 public:
 	tanhActivation(std::string name);
 	~tanhActivation();

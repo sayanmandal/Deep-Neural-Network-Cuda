@@ -12,6 +12,7 @@ private:
 	Matrix Z;
 	Matrix A;
 	Matrix dA;
+	Matrix dZeta;
 
 	Matrix AT;
 	Matrix WT;

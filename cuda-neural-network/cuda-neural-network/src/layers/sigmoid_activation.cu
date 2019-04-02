@@ -85,10 +85,11 @@ Matrix& SigmoidActivation::forward(Matrix& Z) {
 /*
 	sigmoidActivationForward<<<num_of_blocks, block_size>>>(Z.data_device.get(), A.data_device.get(),
 														   	Z.shape.x, Z.shape.y);
-																*/
+*/
+
 	expKernel<<<num_of_blocks, block_size>>>(Z.data_device.get(), A.data_device.get(), A.shape.x * A.shape.y);
-	addKernel<<<num_of_blocks, block_size>>>(Z.data_device.get(), Z.shape.x * Z.shape.y);
-	divideKernel<<<num_of_blocks, block_size>>>(Z.data_device.get(), Z.shape.x * Z.shape.y);
+	addKernel<<<num_of_blocks, block_size>>>(A.data_device.get(), A.shape.x * A.shape.y);
+	divideKernel<<<num_of_blocks, block_size>>>(A.data_device.get(), A.shape.x * A.shape.y);
 
 
 
@@ -109,14 +110,16 @@ Matrix& SigmoidActivation::backprop(Matrix& dA, float learning_rate) {
 	sigmoidActivationBackprop<<<num_of_blocks, block_size>>>(Z.data_device.get(), dA.data_device.get(),
 															 dZ.data_device.get(),
 															 Z.shape.x, Z.shape.y);
-		*/
-	expKernel<<<num_of_blocks, block_size>>>(T.data_device.get(), Z.data_device.get(), Z.shape.x * Z.shape.y);
+*/
+
+
+	expKernel<<<num_of_blocks, block_size>>>(Z.data_device.get(), T.data_device.get(), Z.shape.x * Z.shape.y);
 	addKernel<<<num_of_blocks, block_size>>>(T.data_device.get(), Z.shape.x * Z.shape.y);
 	divideKernel<<<num_of_blocks, block_size>>>(T.data_device.get(), Z.shape.x * Z.shape.y);
 
 	multiplyKernel<<<num_of_blocks, block_size>>>(dZ.data_device.get(), dA.data_device.get(), T.data_device.get(), T.shape.x * T.shape.y);
 
-	expKernel<<<num_of_blocks, block_size>>>(T.data_device.get(), Z.data_device.get(), Z.shape.x * Z.shape.y);
+	expKernel<<<num_of_blocks, block_size>>>(Z.data_device.get(), T.data_device.get(), Z.shape.x * Z.shape.y);
 	addKernel<<<num_of_blocks, block_size>>>(T.data_device.get(), Z.shape.x * Z.shape.y);
 	divideKernel<<<num_of_blocks, block_size>>>(T.data_device.get(), Z.shape.x * Z.shape.y);
 

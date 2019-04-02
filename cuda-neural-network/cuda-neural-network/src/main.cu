@@ -5,8 +5,11 @@
 #include "layers/linear_layer.hh"
 #include "layers/linear_relu.hh"
 #include "layers/linear_sigmoid.hh"
+#include "layers/linear_tanh.hh"
+#include "layers/linear_softmax.hh"
 #include "layers/relu_activation.hh"
 #include "layers/sigmoid_activation.hh"
+#include "layers/tanh_activation.hh"
 #include "nn_utils/nn_exception.hh"
 #include "nn_utils/bce_cost.hh"
 #include "nn_utils/cce_cost.hh"
@@ -36,7 +39,7 @@ void printmatrix1(const Matrix& m){
 
 float computeAccuracy_mnist(const Matrix& predictions, const Matrix& targets);
 int computeAccuracyClasses_mnist(const Matrix& predictions, const Matrix& targets, int k);
-int main() {
+int main(int argc, char* argv[]) {
 
 	srand( time(NULL) );
   Matrix Y;
@@ -44,32 +47,44 @@ int main() {
   CCECost cce_cost;
 
   NeuralNetwork nn;
-  //nn.addLayer(new LinearLayer("linear_1", Shape(28 * 28, 512)));
-  //nn.addLayer(new SigmoidActivation("relu_1"));
-	nn.addLayer(new LinearSigmoidLayer("linear_relu", Shape(28*28, 512)));
-	/*
-  nn.addLayer(new LinearLayer("linear_2", Shape(512, 512)));
-	nn.addLayer(new SigmoidActivation("relu_2"));
 
+  //nn.addLayer(new LinearLayer("linear_1", Shape(28 * 28, 256)));
+  //nn.addLayer(new	tanhActivation("relu_1"));
 
-
-  nn.addLayer(new LinearLayer("linear_3", Shape(512, 512)));
-	nn.addLayer(new SigmoidActivation("relu_3"));
-	nn.addLayer(new LinearLayer("linear_4", Shape(512, 512)));
-	nn.addLayer(new SigmoidActivation("relu_4"));
-	nn.addLayer(new LinearLayer("linear_5", Shape(512, 256)));
-	nn.addLayer(new SigmoidActivation("relu_5"));
+	nn.addLayer(new LinearTanhLayer("Ltanh", Shape(28 * 28, 256)));
+	/*nn.addLayer(new LinearTanhLayer("Ltanh", Shape(256, 256)));
+	nn.addLayer(new LinearTanhLayer("Ltanh", Shape(256, 256)));
+	nn.addLayer(new LinearTanhLayer("Ltanh", Shape(256, 256)));
+	nn.addLayer(new LinearTanhLayer("Ltanh", Shape(256, 256)));
+	nn.addLayer(new LinearTanhLayer("Ltanh", Shape(256, 256)));
+	nn.addLayer(new LinearTanhLayer("Ltanh", Shape(256, 256)));
+	nn.addLayer(new LinearTanhLayer("Ltanh", Shape(256, 256)));
 	*/
-	//nn.addLayer(new LinearSigmoidLayer("l1", Shape(512, 512)));
-	//nn.addLayer(new LinearSigmoidLayer("l2", Shape(512, 256)));
-	//nn.addLayer(new LinearReluLayer("linear_6", Shape(256, 256)));
-	//nn.addLayer(new ReLUActivation("relu_6"));
-	//nn.addLayer(new LinearReluLayer("linear_7", Shape(256, 128)));
-	//nn.addLayer(new ReLUActivation("relu_7"));
+/*
+	nn.addLayer(new LinearLayer("linear_1", Shape(256, 256)));
+  nn.addLayer(new tanhActivation("relu_1"));
 
+	nn.addLayer(new LinearLayer("linear_1", Shape(256, 256)));
+  nn.addLayer(new tanhActivation("relu_1"));
 
-	nn.addLayer(new LinearLayer("linear_8", Shape(128, 10)));
-  nn.addLayer(new softmaxActivation("softmax_output"));
+	nn.addLayer(new LinearLayer("linear_1", Shape(256, 256)));
+  nn.addLayer(new tanhActivation("relu_1"));
+
+	nn.addLayer(new LinearLayer("linear_1", Shape(256, 256)));
+  nn.addLayer(new tanhActivation("relu_1"));
+
+	nn.addLayer(new LinearLayer("linear_1", Shape(256, 256)));
+  nn.addLayer(new tanhActivation("relu_1"));
+
+	nn.addLayer(new LinearLayer("linear_1", Shape(256, 256)));
+  nn.addLayer(new tanhActivation("relu_1"));
+
+	nn.addLayer(new LinearLayer("linear_1", Shape(256, 256)));
+  nn.addLayer(new tanhActivation("relu_1"));
+*/
+	//nn.addLayer(new LinearLayer("linear_8", Shape(256, 10)));
+  //nn.addLayer(new softmaxActivation("softmax_output"));
+	nn.addLayer(new LinearSoftmaxLayer("linear_8", Shape(256, 10)));
 
   MNISTDataset mnist(num_batches_train, batch_size, classes);
   //float cost = 0.0;
@@ -104,7 +119,7 @@ int main() {
 	}
 
 	float accuracy = (float)correct_predictions / (num_batches_test * batch_size);
-	std::cout << "Accuracy: " << accuracy << std::endl;
+	std::cout << "Accuracy: " << accuracy*100 << std::endl;
 
 
 
