@@ -1,5 +1,7 @@
 #include <iostream>
+#include <string>
 #include <time.h>
+#include <chrono>
 
 #include "neural_network.hh"
 #include "layers/linear_layer.hh"
@@ -48,10 +50,19 @@ int main(int argc, char* argv[]) {
 
   NeuralNetwork nn;
 
+	if(argc != 2){
+		std::cout << "Usage: ./a.out <number>" << std::endl;
+		return 0;
+	}
+
+	int arg = std::stoi(argv[1]);
+
+	//std::cout << arg <<std::endl;
+
   //nn.addLayer(new LinearLayer("linear_1", Shape(28 * 28, 256)));
   //nn.addLayer(new	tanhActivation("relu_1"));
 
-	nn.addLayer(new LinearTanhLayer("Ltanh", Shape(28 * 28, 256)));
+	//nn.addLayer(new LinearTanhLayer("Ltanh", Shape(28 * 28, 256)));
 	/*nn.addLayer(new LinearTanhLayer("Ltanh", Shape(256, 256)));
 	nn.addLayer(new LinearTanhLayer("Ltanh", Shape(256, 256)));
 	nn.addLayer(new LinearTanhLayer("Ltanh", Shape(256, 256)));
@@ -60,6 +71,52 @@ int main(int argc, char* argv[]) {
 	nn.addLayer(new LinearTanhLayer("Ltanh", Shape(256, 256)));
 	nn.addLayer(new LinearTanhLayer("Ltanh", Shape(256, 256)));
 	*/
+
+	if(arg == 1){
+		nn.addLayer(new LinearLayer("linear_1", Shape(28*28, 256)));
+	  nn.addLayer(new tanhActivation("relu_1"));
+
+		nn.addLayer(new LinearLayer("linear_1", Shape(256, 256)));
+	  nn.addLayer(new tanhActivation("relu_1"));
+
+		nn.addLayer(new LinearLayer("linear_1", Shape(256, 256)));
+	  nn.addLayer(new tanhActivation("relu_1"));
+
+		nn.addLayer(new LinearLayer("linear_1", Shape(256, 256)));
+	  nn.addLayer(new tanhActivation("relu_1"));
+
+		nn.addLayer(new LinearLayer("linear_1", Shape(256, 256)));
+	  nn.addLayer(new tanhActivation("relu_1"));
+
+		nn.addLayer(new LinearLayer("linear_1", Shape(256, 256)));
+	  nn.addLayer(new tanhActivation("relu_1"));
+
+		nn.addLayer(new LinearLayer("linear_1", Shape(256, 256)));
+	  nn.addLayer(new tanhActivation("relu_1"));
+
+		nn.addLayer(new LinearLayer("linear_8", Shape(256, 10)));
+	  nn.addLayer(new softmaxActivation("softmax_output"));
+
+	}else if(arg == 2){
+		nn.addLayer(new LinearTanhLayer("Ltanh", Shape(28*28, 256)));
+		nn.addLayer(new LinearTanhLayer("Ltanh", Shape(256, 256)));
+		nn.addLayer(new LinearTanhLayer("Ltanh", Shape(256, 256)));
+		nn.addLayer(new LinearTanhLayer("Ltanh", Shape(256, 256)));
+		nn.addLayer(new LinearTanhLayer("Ltanh", Shape(256, 256)));
+		nn.addLayer(new LinearTanhLayer("Ltanh", Shape(256, 256)));
+		nn.addLayer(new LinearTanhLayer("Ltanh", Shape(256, 256)));
+		nn.addLayer(new LinearSoftmaxLayer("linear_8", Shape(256, 10)));
+
+	}else{
+		nn.addLayer(new LinearLayer("linear_1", Shape(28*28, 256)));
+	  nn.addLayer(new ReLUActivation("relu_1"));
+
+		nn.addLayer(new LinearLayer("linear_8", Shape(256, 10)));
+	  nn.addLayer(new softmaxActivation("softmax_output"));
+	}
+
+	//nn.addLayer(new LinearLayer("linear_1", Shape(256, 256)));
+  //nn.addLayer(new tanhActivation("relu_1"));
 /*
 	nn.addLayer(new LinearLayer("linear_1", Shape(256, 256)));
   nn.addLayer(new tanhActivation("relu_1"));
@@ -75,27 +132,37 @@ int main(int argc, char* argv[]) {
 
 	nn.addLayer(new LinearLayer("linear_1", Shape(256, 256)));
   nn.addLayer(new tanhActivation("relu_1"));
+	*/
 
-	nn.addLayer(new LinearLayer("linear_1", Shape(256, 256)));
-  nn.addLayer(new tanhActivation("relu_1"));
 
-	nn.addLayer(new LinearLayer("linear_1", Shape(256, 256)));
-  nn.addLayer(new tanhActivation("relu_1"));
-*/
-	//nn.addLayer(new LinearLayer("linear_8", Shape(256, 10)));
-  //nn.addLayer(new softmaxActivation("softmax_output"));
-	nn.addLayer(new LinearSoftmaxLayer("linear_8", Shape(256, 10)));
+	//nn.addLayer(new LinearSoftmaxLayer("linear_8", Shape(256, 10)));
 
   MNISTDataset mnist(num_batches_train, batch_size, classes);
   //float cost = 0.0;
+
+
+
+	double ftime = 0.0;
+	double btime = 0.0;
+	double ttime = 0.0;
+
+	auto st = std::chrono::steady_clock::now();
 
   for (int epoch = 0; epoch < 601; epoch++) {
 		float cost = 0.0;
     for(int batch = 0 ; batch < num_batches_train ; batch++){
        //Y = mnist.getBatches().at(batch);
        //printmatrix1(Y);
+			 auto start = std::chrono::steady_clock::now();
        Y = nn.forward(mnist.getBatches().at(batch));
+			 auto end = std::chrono::steady_clock::now();
+			 ftime += std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+
+			 auto start1 = std::chrono::steady_clock::now();
        nn.backprop(Y, mnist.getTargets().at(batch));
+			 auto end1 = std::chrono::steady_clock::now();
+			 btime += std::chrono::duration_cast<std::chrono::milliseconds>(end1 - start1).count();
+
        cost += cce_cost.cost(Y, mnist.getTargets().at(batch));
     }
     if(epoch%100 == 0){
@@ -105,6 +172,12 @@ int main(int argc, char* argv[]) {
     }
   }
 
+	auto en = std::chrono::steady_clock::now();
+	ttime = std::chrono::duration_cast<std::chrono::milliseconds>(en - st).count();
+
+	std::cout <<  "forward time: " << ftime/(602) << std::endl;
+	std::cout << "backward time: " << btime/(602) << std::endl;
+	std::cout << "Total time: " << ttime/(602) << std::endl;
 
 	std::cout << "Testing..." << std::endl;
 
